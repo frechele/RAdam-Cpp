@@ -23,17 +23,19 @@ class RAdam final
         }
 
         Eigen::VectorXd grad = Eigen::VectorXd::Zero(x.size());
-        const double initEnergy = func(x, grad);
+        func(x, grad);
 
         expAvg_ = params_.beta_0 * expAvg_ + (1 - params_.beta_0) * grad;
-        expAvgSq_ =
-            params_.beta_1 * expAvgSq_.array() + (1 - params_.beta_1) * grad.array() * grad.array();
+        expAvgSq_ = params_.beta_1 * expAvgSq_.array() +
+                    (1 - params_.beta_1) * grad.array() * grad.array();
         ++step_;
 
         const double beta0_t = std::pow<double>(params_.beta_0, step_);
         const double beta1_t = std::pow<double>(params_.beta_1, step_);
         const double rho_inf = 2 / (1 - params_.beta_1) - 1;
         const double rho_t = rho_inf * 2 * step_ * beta1_t * (1 - beta1_t);
+
+        double updateSize = 0;
 
         if (rho_t > 4)
         {
@@ -46,16 +48,23 @@ class RAdam final
                 expAvgSq_.cwiseSqrt() +
                 params_.epsilon * Eigen::VectorXd::Ones(expAvgSq_.size());
 
-            x = x.array() - stepSize * expAvg_.array() / denom.array();
+            const Eigen::VectorXd delta =
+                stepSize * expAvg_.array() / denom.array();
+
+            x = x.array() - delta.array();
+            updateSize = delta.norm();
         }
         else
         {
             const double stepSize = params_.lr / (1 - beta0_t);
 
-            x = x - stepSize * expAvg_;
+            const auto delta = stepSize * expAvg_;
+
+            x = x - delta;
+            updateSize = delta.norm();
         }
 
-        return initEnergy;
+        return updateSize;
     }
 
  private:
